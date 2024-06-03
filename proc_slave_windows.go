@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 package overseer
@@ -9,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/StackExchange/wmi"
+	"github.com/yusufpapurcu/wmi"
 )
 
 var (
