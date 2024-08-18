@@ -1,4 +1,4 @@
-// +build !linux,!darwin,!windows,!freebsd
+//go:build !linux && !darwin && !windows && !freebsd
 
 package overseer
 

@@ -15,9 +15,9 @@ import (
 	"github.com/jpillora/s3"
 )
 
-//S3 uses authenticated HEAD requests to poll the status of a given
-//object. If it detects this file has been updated, it will perform
-//an object GET and return its io.Reader stream.
+// S3 uses authenticated HEAD requests to poll the status of a given
+// object. If it detects this file has been updated, it will perform
+// an object GET and return its io.Reader stream.
 type S3 struct {
 	//Access key falls back to env AWS_ACCESS_KEY, then metadata
 	Access string
@@ -68,6 +68,12 @@ func (s *S3) Init() error {
 	if s.GetTimeout <= 0 {
 		s.GetTimeout = 5 * time.Minute
 	}
+
+	//http client where we change the timeout
+	s.client = &http.Client{
+		Timeout: time.Second * 10,
+	}
+
 	return nil
 }
 
@@ -78,8 +84,6 @@ func (s *S3) Fetch() (io.Reader, error) {
 		time.Sleep(s.Interval)
 	}
 	s.delay = true
-	//http client where we change the timeout
-	c := http.Client{}
 	//options for this key
 	creds := s3.AmbientCredentials()
 	if s.Access != "" && s.Secret != "" {
@@ -91,8 +95,8 @@ func (s *S3) Fetch() (io.Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	c.Timeout = s.HeadTimeout
-	resp, err := c.Do(req)
+	s.client.Timeout = s.HeadTimeout
+	resp, err := s.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HEAD request failed (%s)", err)
 	}
@@ -109,8 +113,8 @@ func (s *S3) Fetch() (io.Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	c.Timeout = s.GetTimeout
-	resp, err = c.Do(req)
+	s.client.Timeout = s.GetTimeout
+	resp, err = s.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("GET request failed (%s)", err)
 	}

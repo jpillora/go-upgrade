@@ -12,10 +12,10 @@ import (
 	"time"
 )
 
-//Github uses the Github V3 API to retrieve the latest release
-//of a given repository and enumerate its assets. If a release
-//contains a matching asset, it will fetch
-//and return its io.Reader stream.
+// Github uses the Github V3 API to retrieve the latest release
+// of a given repository and enumerate its assets. If a release
+// contains a matching asset, it will fetch
+// and return its io.Reader stream.
 type Github struct {
 	//Github username and repository name
 	User, Repo string
@@ -46,10 +46,10 @@ func (h *Github) defaultAsset(filename string) bool {
 func (h *Github) Init() error {
 	//apply defaults
 	if h.User == "" {
-		return fmt.Errorf("User required")
+		return fmt.Errorf("user required")
 	}
 	if h.Repo == "" {
-		return fmt.Errorf("Repo required")
+		return fmt.Errorf("repo required")
 	}
 	if h.Asset == nil {
 		h.Asset = h.defaultAsset

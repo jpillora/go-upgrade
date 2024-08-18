@@ -2,3 +2,4 @@ tmp
 myapp*
 example/docker
 .idea
+.vscode
