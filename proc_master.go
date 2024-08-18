@@ -15,23 +15,21 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"sync"
 	"syscall"
 	"time"
 )
 
 var tmpBinPath = filepath.Join(os.TempDir(), "overseer-"+token()+extension())
 
-//a overseer master process
+// a overseer master process
 type master struct {
 	*Config
 	slaveID             int
 	slaveCmd            *exec.Cmd
 	slaveExtraFiles     []*os.File
-	binPath, tmpBinPath string
+	binPath             string
 	binPerms            os.FileMode
 	binHash             []byte
-	restartMux          sync.Mutex
 	restarting          bool
 	restartedAt         time.Time
 	restarted           chan bool
@@ -105,7 +103,7 @@ func (mp *master) setupSignalling() {
 	mp.restarted = make(chan bool)
 	mp.descriptorsReleased = make(chan bool)
 	//read all master process signals
-	signals := make(chan os.Signal)
+	signals := make(chan os.Signal, 1)
 	signal.Notify(signals)
 	go func() {
 		for s := range signals {
@@ -158,7 +156,7 @@ func (mp *master) retreiveFileDescriptors() error {
 	for i, addr := range mp.Config.Addresses {
 		a, err := net.ResolveTCPAddr("tcp", addr)
 		if err != nil {
-			return fmt.Errorf("Invalid address %s (%s)", addr, err)
+			return fmt.Errorf("invalid address %s (%s)", addr, err)
 		}
 		l, err := net.ListenTCP("tcp", a)
 		if err != nil {
@@ -166,17 +164,17 @@ func (mp *master) retreiveFileDescriptors() error {
 		}
 		f, err := l.File()
 		if err != nil {
-			return fmt.Errorf("Failed to retreive fd for: %s (%s)", addr, err)
+			return fmt.Errorf("failed to retreive fd for: %s (%s)", addr, err)
 		}
 		if err := l.Close(); err != nil {
-			return fmt.Errorf("Failed to close listener for: %s (%s)", addr, err)
+			return fmt.Errorf("failed to close listener for: %s (%s)", addr, err)
 		}
 		mp.slaveExtraFiles[i] = f
 	}
 	return nil
 }
 
-//fetchLoop is run in a goroutine
+// fetchLoop is run in a goroutine
 func (mp *master) fetchLoop() {
 	min := mp.Config.MinFetchInterval
 	time.Sleep(min)
@@ -184,7 +182,7 @@ func (mp *master) fetchLoop() {
 		t0 := time.Now()
 		mp.fetch()
 		//duration fetch of fetch
-		diff := time.Now().Sub(t0)
+		diff := time.Since(t0)
 		if diff < min {
 			delay := min - diff
 			//ensures at least MinFetchInterval delay.
@@ -304,7 +302,6 @@ func (mp *master) fetch() {
 		mp.triggerRestart()
 	}
 	//and keep fetching...
-	return
 }
 
 func (mp *master) triggerRestart() {
@@ -331,7 +328,7 @@ func (mp *master) triggerRestart() {
 	}
 }
 
-//not a real fork
+// not a real fork
 func (mp *master) forkLoop() error {
 	//loop, restart command
 	for {
@@ -364,7 +361,7 @@ func (mp *master) fork() error {
 	//include socket files
 	cmd.ExtraFiles = mp.slaveExtraFiles
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("Failed to start slave process: %s", err)
+		return fmt.Errorf("failed to start slave process: %s", err)
 	}
 	//was scheduled to restart, notify success
 	if mp.restarting {

@@ -9,20 +9,21 @@ import (
 	"time"
 )
 
-//HTTP fetcher uses HEAD requests to poll the status of a given
-//file. If it detects this file has been updated, it will fetch
-//and return its io.Reader stream.
+// HTTP fetcher uses HEAD requests to poll the status of a given
+// file. If it detects this file has been updated, it will fetch
+// and return its io.Reader stream.
 type HTTP struct {
 	//URL to poll for new binaries
 	URL          string
 	Interval     time.Duration
 	CheckHeaders []string
 	//internal state
-	delay bool
-	lasts map[string]string
+	delay  bool
+	lasts  map[string]string
+	client *http.Client
 }
 
-//if any of these change, the binary has been updated
+// if any of these change, the binary has been updated
 var defaultHTTPCheckHeaders = []string{"ETag", "If-Modified-Since", "Last-Modified", "Content-Length"}
 
 // Init validates the provided config
@@ -37,6 +38,9 @@ func (h *HTTP) Init() error {
 	}
 	if h.CheckHeaders == nil {
 		h.CheckHeaders = defaultHTTPCheckHeaders
+	}
+	h.client = &http.Client{
+		Timeout: time.Second * 10,
 	}
 	return nil
 }
@@ -72,7 +76,7 @@ func (h *HTTP) Fetch() (io.Reader, error) {
 		return nil, nil //skip, file match
 	}
 	//binary fetch using GET
-	resp, err = http.Get(h.URL)
+	resp, err = h.client.Get(h.URL)
 	if err != nil {
 		return nil, fmt.Errorf("GET request failed (%s)", err)
 	}

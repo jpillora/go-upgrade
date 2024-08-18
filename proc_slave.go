@@ -103,7 +103,7 @@ func (sp *slave) initFileDescriptors() error {
 }
 
 func (sp *slave) watchSignal() {
-	signals := make(chan os.Signal)
+	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, sp.Config.RestartSignal)
 	go func() {
 		<-signals
@@ -142,12 +142,6 @@ func (sp *slave) triggerRestart() {
 
 func (sp *slave) debugf(f string, args ...interface{}) {
 	if sp.Config.Debug {
-		log.Printf("[overseer slave#"+sp.id+"] "+f, args...)
-	}
-}
-
-func (sp *slave) warnf(f string, args ...interface{}) {
-	if sp.Config.Debug || !sp.Config.NoWarn {
 		log.Printf("[overseer slave#"+sp.id+"] "+f, args...)
 	}
 }
