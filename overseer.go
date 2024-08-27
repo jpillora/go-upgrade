@@ -21,6 +21,7 @@ const (
 	envBinPath        = "OVERSEER_BIN_PATH"
 	envBinCheck       = "OVERSEER_BIN_CHECK"
 	envBinCheckLegacy = "GO_UPGRADE_BIN_CHECK"
+	envIsRestart      = "OVERSEER_IS_RESTART"
 )
 
 // Config defines overseer's run-time configuration
@@ -98,6 +99,7 @@ func RunErr(c Config) error {
 // encountered, overseer fallsback to running
 // the program directly (unless Required is set).
 func Run(c Config) {
+	os.Setenv(envIsRestart, "0")
 	err := runErr(&c)
 	if err != nil {
 		if c.Required {
@@ -167,6 +169,7 @@ func runErr(c *Config) error {
 // Restart programmatically triggers a graceful restart. If NoRestart
 // is enabled, then this will essentially be a graceful shutdown.
 func Restart() {
+	os.Setenv(envIsRestart, "1")
 	if currentProcess != nil {
 		currentProcess.triggerRestart()
 	}

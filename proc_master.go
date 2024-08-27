@@ -22,7 +22,7 @@ import (
 
 var tmpBinPath = filepath.Join(os.TempDir(), "overseer-"+token()+extension())
 
-//a overseer master process
+// a overseer master process
 type master struct {
 	*Config
 	slaveID             int
@@ -176,7 +176,7 @@ func (mp *master) retreiveFileDescriptors() error {
 	return nil
 }
 
-//fetchLoop is run in a goroutine
+// fetchLoop is run in a goroutine
 func (mp *master) fetchLoop() {
 	min := mp.Config.MinFetchInterval
 	time.Sleep(min)
@@ -195,7 +195,7 @@ func (mp *master) fetchLoop() {
 }
 
 func (mp *master) fetch() {
-	if mp.restarting {
+	if mp.isRestarting() {
 		return //skip if restarting
 	}
 	if mp.printCheckUpdate {
@@ -308,10 +308,10 @@ func (mp *master) fetch() {
 }
 
 func (mp *master) triggerRestart() {
-	if mp.restarting {
+	if mp.isRestarting() {
 		mp.debugf("already graceful restarting")
 		return //skip
-	} else if mp.slaveCmd == nil || mp.restarting {
+	} else if mp.slaveCmd == nil || mp.isRestarting() {
 		mp.debugf("no slave process")
 		return //skip
 	}
@@ -331,7 +331,7 @@ func (mp *master) triggerRestart() {
 	}
 }
 
-//not a real fork
+// not a real fork
 func (mp *master) forkLoop() error {
 	//loop, restart command
 	for {
@@ -367,7 +367,7 @@ func (mp *master) fork() error {
 		return fmt.Errorf("Failed to start slave process: %s", err)
 	}
 	//was scheduled to restart, notify success
-	if mp.restarting {
+	if mp.isRestarting() {
 		mp.restartedAt = time.Now()
 		mp.restarting = false
 		mp.restarted <- true
@@ -395,7 +395,7 @@ func (mp *master) fork() error {
 		//if a restarts are disabled or if it was an
 		//unexpected crash, proxy this exit straight
 		//through to the main process
-		if mp.NoRestart || !mp.restarting {
+		if mp.NoRestart || !mp.isRestarting() {
 			os.Exit(code)
 		}
 	case <-mp.descriptorsReleased:
@@ -420,6 +420,10 @@ func (mp *master) warnf(f string, args ...interface{}) {
 	if mp.Config.Debug || !mp.Config.NoWarn {
 		log.Printf("[overseer master] "+f, args...)
 	}
+}
+
+func (mp *master) isRestarting() bool {
+	return mp.restarting || os.Getenv(envIsRestart) == "1"
 }
 
 func token() string {
