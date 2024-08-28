@@ -397,7 +397,7 @@ func (mp *master) fork() error {
 		//if a restarts are disabled or if it was an
 		//unexpected crash, proxy this exit straight
 		//through to the main process
-		if mp.NoRestart || !mp.isRestarting() {
+		if mp.NoRestart || !(mp.restarting || mp.restartFlagFileExists()) {
 			os.Exit(code)
 		}
 	case <-mp.descriptorsReleased:
@@ -424,18 +424,16 @@ func (mp *master) warnf(f string, args ...interface{}) {
 	}
 }
 
-func (mp *master) isRestarting() bool {
+func (mp *master) restartFlagFileExists() bool {
 	if runtime.GOOS == "windows" {
 		flagFile, err := getRestartFlagFilePath()
 		if err == nil {
 			_, err = os.Stat(flagFile)
-			exists := err == nil || os.IsExist(err)
-
-			return mp.restarting || exists
+			return err == nil || os.IsExist(err)
 		}
 	}
 
-	return mp.restarting
+	return false
 }
 
 func token() string {

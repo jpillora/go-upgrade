@@ -150,15 +150,20 @@ func runErr(c *Config) error {
 	if !supported {
 		return fmt.Errorf("os (%s) not supported", runtime.GOOS)
 	}
-	if runtime.GOOS == "windows" {
-		flagFile, _ := getRestartFlagFilePath()
-		os.Remove(flagFile)
-	}
 	if err := validate(c); err != nil {
 		return err
 	}
 	if sanityCheck() {
 		return nil
+	}
+	if runtime.GOOS == "windows" {
+		flagFile, err := getRestartFlagFilePath()
+		if err == nil {
+			err = os.Remove(flagFile)
+		}
+		if err != nil {
+			log.Printf("[overseer] failed to remove restart flag file: %s", err)
+		}
 	}
 	//run either in master or slave mode
 	if os.Getenv(envIsSlave) == "1" {
@@ -176,11 +181,10 @@ func Restart() {
 		if runtime.GOOS == "windows" {
 			flagFile, err := getRestartFlagFilePath()
 			if err == nil {
-				log.Printf("[overseer] restart not supported on windows %s", flagFile)
 				err = os.WriteFile(flagFile, []byte("1"), 0755)
-				if err != nil {
-					log.Printf("[overseer] failed to write restart flag file: %s", err)
-				}
+			}
+			if err != nil {
+				log.Printf("[overseer] failed to write restart flag file: %s", err)
 			}
 		}
 
