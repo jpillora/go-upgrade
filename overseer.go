@@ -3,6 +3,7 @@
 package overseer
 
 import (
+	"crypto/sha1"
 	"errors"
 	"fmt"
 	"log"
@@ -21,7 +22,6 @@ const (
 	envBinPath        = "OVERSEER_BIN_PATH"
 	envBinCheck       = "OVERSEER_BIN_CHECK"
 	envBinCheckLegacy = "GO_UPGRADE_BIN_CHECK"
-	envIsRestart      = "OVERSEER_IS_RESTART"
 )
 
 // Config defines overseer's run-time configuration
@@ -99,7 +99,6 @@ func RunErr(c Config) error {
 // encountered, overseer fallsback to running
 // the program directly (unless Required is set).
 func Run(c Config) {
-	os.Setenv(envIsRestart, "0")
 	err := runErr(&c)
 	if err != nil {
 		if c.Required {
@@ -151,6 +150,10 @@ func runErr(c *Config) error {
 	if !supported {
 		return fmt.Errorf("os (%s) not supported", runtime.GOOS)
 	}
+	if runtime.GOOS == "windows" {
+		flagFile, _ := getRestartFlagFilePath()
+		os.Remove(flagFile)
+	}
 	if err := validate(c); err != nil {
 		return err
 	}
@@ -169,10 +172,33 @@ func runErr(c *Config) error {
 // Restart programmatically triggers a graceful restart. If NoRestart
 // is enabled, then this will essentially be a graceful shutdown.
 func Restart() {
-	os.Setenv(envIsRestart, "1")
 	if currentProcess != nil {
+		if runtime.GOOS == "windows" {
+			flagFile, err := getRestartFlagFilePath()
+			if err == nil {
+				log.Printf("[overseer] restart not supported on windows %s", flagFile)
+				err = os.WriteFile(flagFile, []byte("1"), 0755)
+				if err != nil {
+					log.Printf("[overseer] failed to write restart flag file: %s", err)
+				}
+			}
+		}
+
 		currentProcess.triggerRestart()
 	}
+}
+
+func getRestartFlagFilePath() (string, error) {
+	binPath, err := os.Executable()
+	if err == nil {
+		hash := sha1.New()
+		hash.Write([]byte(binPath))
+		binPathHash := hash.Sum(nil)
+		flagFile := fmt.Sprintf(restartFlagFile, fmt.Sprintf("%x", binPathHash))
+		return flagFile, nil
+	}
+
+	return "", err
 }
 
 // IsSupported returns whether overseer is supported on the current OS.

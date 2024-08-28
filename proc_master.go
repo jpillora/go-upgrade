@@ -21,6 +21,7 @@ import (
 )
 
 var tmpBinPath = filepath.Join(os.TempDir(), "overseer-"+token()+extension())
+var restartFlagFile = filepath.Join(os.TempDir(), "overseer-") + "%s" + ".restart.flag"
 
 // a overseer master process
 type master struct {
@@ -195,7 +196,7 @@ func (mp *master) fetchLoop() {
 }
 
 func (mp *master) fetch() {
-	if mp.isRestarting() {
+	if mp.restarting {
 		return //skip if restarting
 	}
 	if mp.printCheckUpdate {
@@ -308,10 +309,10 @@ func (mp *master) fetch() {
 }
 
 func (mp *master) triggerRestart() {
-	if mp.isRestarting() {
+	if mp.restarting {
 		mp.debugf("already graceful restarting")
 		return //skip
-	} else if mp.slaveCmd == nil || mp.isRestarting() {
+	} else if mp.slaveCmd == nil || mp.restarting {
 		mp.debugf("no slave process")
 		return //skip
 	}
@@ -367,11 +368,12 @@ func (mp *master) fork() error {
 		return fmt.Errorf("Failed to start slave process: %s", err)
 	}
 	//was scheduled to restart, notify success
-	if mp.isRestarting() {
+	if mp.restarting {
 		mp.restartedAt = time.Now()
 		mp.restarting = false
 		mp.restarted <- true
 	}
+	log.Printf("slave process started with pid %d", cmd.Process.Pid)
 	//convert wait into channel
 	cmdwait := make(chan error)
 	go func() {
@@ -423,7 +425,17 @@ func (mp *master) warnf(f string, args ...interface{}) {
 }
 
 func (mp *master) isRestarting() bool {
-	return mp.restarting || os.Getenv(envIsRestart) == "1"
+	if runtime.GOOS == "windows" {
+		flagFile, err := getRestartFlagFilePath()
+		if err == nil {
+			_, err = os.Stat(flagFile)
+			exists := err == nil || os.IsExist(err)
+
+			return mp.restarting || exists
+		}
+	}
+
+	return mp.restarting
 }
 
 func token() string {
