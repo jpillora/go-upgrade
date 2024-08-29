@@ -103,7 +103,7 @@ func (mp *master) checkBinary() error {
 
 func (mp *master) setupSignalling() {
 	//updater-forker comms
-	mp.restarted = make(chan bool)
+	mp.restarted = make(chan bool, 1)
 	mp.descriptorsReleased = make(chan bool)
 	//read all master process signals
 	signals := make(chan os.Signal)
