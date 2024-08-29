@@ -3,6 +3,7 @@
 package overseer
 
 import (
+	"crypto/sha1"
 	"errors"
 	"fmt"
 	"log"
@@ -30,6 +31,8 @@ type Config struct {
 	Required bool
 	//Program's main function
 	Program func(state State)
+	//Program's exit function
+	ProgramExit func(state State)
 	//Program's zero-downtime socket listening address (set this or Addresses)
 	Address string
 	//Program's zero-downtime socket listening addresses (set this or Address)
@@ -86,15 +89,15 @@ func validate(c *Config) error {
 	return nil
 }
 
-//RunErr allows manual handling of any
-//overseer errors.
+// RunErr allows manual handling of any
+// overseer errors.
 func RunErr(c Config) error {
 	return runErr(&c)
 }
 
-//Run executes overseer, if an error is
-//encountered, overseer fallsback to running
-//the program directly (unless Required is set).
+// Run executes overseer, if an error is
+// encountered, overseer fallsback to running
+// the program directly (unless Required is set).
 func Run(c Config) {
 	err := runErr(&c)
 	if err != nil {
@@ -109,7 +112,7 @@ func Run(c Config) {
 	os.Exit(0)
 }
 
-//sanityCheck returns true if a check was performed
+// sanityCheck returns true if a check was performed
 func sanityCheck() bool {
 	//sanity check
 	if token := os.Getenv(envBinCheck); token != "" {
@@ -124,19 +127,19 @@ func sanityCheck() bool {
 	return false
 }
 
-//SanityCheck manually runs the check to ensure this binary
-//is compatible with overseer. This tries to ensure that a restart
-//is never performed against a bad binary, as it would require
-//manual intervention to rectify. This is automatically done
-//on overseer.Run() though it can be manually run prior whenever
-//necessary.
+// SanityCheck manually runs the check to ensure this binary
+// is compatible with overseer. This tries to ensure that a restart
+// is never performed against a bad binary, as it would require
+// manual intervention to rectify. This is automatically done
+// on overseer.Run() though it can be manually run prior whenever
+// necessary.
 func SanityCheck() {
 	if sanityCheck() {
 		os.Exit(0)
 	}
 }
 
-//abstraction over master/slave
+// abstraction over master/slave
 var currentProcess interface {
 	triggerRestart()
 	run() error
@@ -153,6 +156,15 @@ func runErr(c *Config) error {
 	if sanityCheck() {
 		return nil
 	}
+	if runtime.GOOS == "windows" {
+		flagFile, err := getRestartFlagFilePath()
+		if err == nil {
+			err = os.Remove(flagFile)
+		}
+		if err != nil {
+			log.Printf("[overseer] failed to remove restart flag file: %s", err)
+		}
+	}
 	//run either in master or slave mode
 	if os.Getenv(envIsSlave) == "1" {
 		currentProcess = &slave{Config: c}
@@ -162,15 +174,38 @@ func runErr(c *Config) error {
 	return currentProcess.run()
 }
 
-//Restart programmatically triggers a graceful restart. If NoRestart
-//is enabled, then this will essentially be a graceful shutdown.
+// Restart programmatically triggers a graceful restart. If NoRestart
+// is enabled, then this will essentially be a graceful shutdown.
 func Restart() {
 	if currentProcess != nil {
+		if runtime.GOOS == "windows" {
+			flagFile, err := getRestartFlagFilePath()
+			if err == nil {
+				err = os.WriteFile(flagFile, []byte("1"), 0755)
+			}
+			if err != nil {
+				log.Printf("[overseer] failed to write restart flag file: %s", err)
+			}
+		}
+
 		currentProcess.triggerRestart()
 	}
 }
 
-//IsSupported returns whether overseer is supported on the current OS.
+func getRestartFlagFilePath() (string, error) {
+	binPath, err := os.Executable()
+	if err == nil {
+		hash := sha1.New()
+		hash.Write([]byte(binPath))
+		binPathHash := hash.Sum(nil)
+		flagFile := fmt.Sprintf(restartFlagFile, fmt.Sprintf("%x", binPathHash))
+		return flagFile, nil
+	}
+
+	return "", err
+}
+
+// IsSupported returns whether overseer is supported on the current OS.
 func IsSupported() bool {
 	return supported
 }

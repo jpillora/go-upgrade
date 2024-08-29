@@ -21,8 +21,9 @@ import (
 )
 
 var tmpBinPath = filepath.Join(os.TempDir(), "overseer-"+token()+extension())
+var restartFlagFile = filepath.Join(os.TempDir(), "overseer-") + "%s" + ".restart.flag"
 
-//a overseer master process
+// a overseer master process
 type master struct {
 	*Config
 	slaveID             int
@@ -102,7 +103,7 @@ func (mp *master) checkBinary() error {
 
 func (mp *master) setupSignalling() {
 	//updater-forker comms
-	mp.restarted = make(chan bool)
+	mp.restarted = make(chan bool, 1)
 	mp.descriptorsReleased = make(chan bool)
 	//read all master process signals
 	signals := make(chan os.Signal)
@@ -176,7 +177,7 @@ func (mp *master) retreiveFileDescriptors() error {
 	return nil
 }
 
-//fetchLoop is run in a goroutine
+// fetchLoop is run in a goroutine
 func (mp *master) fetchLoop() {
 	min := mp.Config.MinFetchInterval
 	time.Sleep(min)
@@ -331,7 +332,7 @@ func (mp *master) triggerRestart() {
 	}
 }
 
-//not a real fork
+// not a real fork
 func (mp *master) forkLoop() error {
 	//loop, restart command
 	for {
@@ -372,6 +373,7 @@ func (mp *master) fork() error {
 		mp.restarting = false
 		mp.restarted <- true
 	}
+	log.Printf("slave process started with pid %d", cmd.Process.Pid)
 	//convert wait into channel
 	cmdwait := make(chan error)
 	go func() {
@@ -395,7 +397,7 @@ func (mp *master) fork() error {
 		//if a restarts are disabled or if it was an
 		//unexpected crash, proxy this exit straight
 		//through to the main process
-		if mp.NoRestart || !mp.restarting {
+		if mp.NoRestart || !(mp.restarting || mp.restartFlagFileExists()) {
 			os.Exit(code)
 		}
 	case <-mp.descriptorsReleased:
@@ -420,6 +422,18 @@ func (mp *master) warnf(f string, args ...interface{}) {
 	if mp.Config.Debug || !mp.Config.NoWarn {
 		log.Printf("[overseer master] "+f, args...)
 	}
+}
+
+func (mp *master) restartFlagFileExists() bool {
+	if runtime.GOOS == "windows" {
+		flagFile, err := getRestartFlagFilePath()
+		if err == nil {
+			_, err = os.Stat(flagFile)
+			return err == nil || os.IsExist(err)
+		}
+	}
+
+	return false
 }
 
 func token() string {

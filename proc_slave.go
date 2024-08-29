@@ -135,6 +135,10 @@ func (sp *slave) watchSignal() {
 }
 
 func (sp *slave) triggerRestart() {
+	if sp.Config.ProgramExit != nil {
+		sp.Config.ProgramExit(sp.state)
+	}
+
 	if err := sp.masterProc.Signal(sp.Config.RestartSignal); err != nil {
 		os.Exit(1)
 	}
